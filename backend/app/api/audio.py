@@ -1,7 +1,15 @@
-from fastapi import APIRouter, UploadFile, HTTPException
+from fastapi import APIRouter, UploadFile, HTTPException, Form, File, Depends
+from fastapi.responses import FileResponse
 from app.core.audio_analyzer import AudioAnalyzer
+from app.core.midi_generator import MidiGenerator
 from app.utils.file_handler import validate_audio_file
-from app.models.audio import AudioAnalysisResponse, AudioAnalysisError
+from app.models.audio import AudioAnalysisResponse, AudioAnalysisError, MidiGenerationOptions, PatternType
+import tempfile
+import os
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/audio",
@@ -41,6 +49,7 @@ async def analyze_audio(file: UploadFile):
         # Re-raise HTTP exceptions as they're already properly formatted
         raise
     except Exception as e:
+        logger.error(f"Error analyzing audio: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error analyzing audio: {str(e)}"

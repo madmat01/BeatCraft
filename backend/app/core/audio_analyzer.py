@@ -20,14 +20,18 @@ class AudioAnalyzer:
             - tempo (float): Estimated tempo in BPM
             - beat_frames (List[float]): List of beat frame timings
         """
-        # Create a temporary file to store the audio data
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
-            temp_file.write(audio_data)
-            temp_file.flush()
+        # Create a temporary directory for our operations
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create a temporary file path
+            temp_wav = os.path.join(temp_dir, "temp_audio.wav")
+            
+            # Write audio data to file
+            with open(temp_wav, 'wb') as f:
+                f.write(audio_data)
             
             try:
                 # Load the audio file
-                y, sr = librosa.load(temp_file.name)
+                y, sr = librosa.load(temp_wav)
                 
                 # Estimate tempo and beat frames
                 tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
@@ -36,9 +40,8 @@ class AudioAnalyzer:
                 beat_times = librosa.frames_to_time(beat_frames, sr=sr)
                 
                 return tempo, beat_times.tolist()
-            finally:
-                # Clean up the temporary file
-                os.unlink(temp_file.name)
+            except Exception as e:
+                raise e
     
     @staticmethod
     async def analyze_swing(beat_times: List[float]) -> float:

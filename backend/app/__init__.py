@@ -24,6 +24,6 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
-# Import and include routers
-from app.routers import audio
+# Import and include API routes
+from app.api import audio
 app.include_router(audio.router)
