@@ -4,17 +4,9 @@ python-multipart>=0.0.5
 librosa>=0.9.0
 numpy>=1.21.0
 scipy>=1.7.0
-fastapi
-uvicorn
-librosa
-numpy
-scipy
-python-magic-bin
-pytest==8.3.5
-pytest-asyncio==0.23.5
-httpx>=0.24.0  # Required for TestClient
-python-dotenv>=0.19.0
 pretty-midi>=0.2.9
-setuptools>=0.19.0
+pytest>=6.2.5
+python-dotenv>=0.19.0
 pydantic>=1.8.2
 python-magic-bin>=0.4.14
+httpx>=0.24.0  # Required for TestClient

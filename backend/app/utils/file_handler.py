@@ -3,13 +3,11 @@ from typing import List
 import magic
 
 ALLOWED_AUDIO_TYPES = [
-    'audio/mpeg',      # MP3
-    'audio/wav',       # WAV
-    'audio/x-wav',     # WAV alternative mime type
-    'audio/vnd.wave',  # Another WAV alternative
-    'audio/wave',      # Another WAV alternative
-    'audio/aiff',      # AIFF
-    'audio/x-aiff'     # AIFF alternative mime type
+    'audio/mpeg',  # MP3
+    'audio/wav',   # WAV
+    'audio/x-wav', # WAV alternative mime type
+    'audio/aiff',  # AIFF
+    'audio/x-aiff' # AIFF alternative mime type
 ]
 
 async def validate_audio_file(file: UploadFile) -> bytes:
