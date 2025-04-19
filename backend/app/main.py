@@ -11,14 +11,14 @@ app = FastAPI(
 # Enable CORS for frontend development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite default port
+    allow_origins=["http://localhost:5173", "http://localhost:5174"],  # Vite default port and alternative
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include the audio API routes
-app.include_router(audio_router)
+# Include the audio API routes with /audio prefix to match frontend expectations
+app.include_router(audio_router, prefix="/audio")
 
 @app.get("/")
 async def root():

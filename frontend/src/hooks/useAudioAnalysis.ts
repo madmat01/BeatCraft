@@ -15,16 +15,28 @@ export const useAudioAnalysis = () => {
       formData.append('file', file);
       formData.append('num_bars', numBars.toString());
 
-      const response = await axios.post<AnalysisResponse>('/api/analyze', formData, {
+      const response = await axios.post<AnalysisResponse>('/api/audio/analyze', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
 
       setAnalysis(response.data);
+      console.log('Analysis successful:', response.data);
     } catch (error) {
+      console.error('Error analyzing audio:', error);
       if (axios.isAxiosError<ErrorResponse>(error)) {
-        setError(error.response?.data.detail || 'Failed to analyze audio');
+        // More specific error handling based on status codes
+        if (error.response?.status === 400) {
+          // Format error 
+          setError(error.response.data.detail || 'MP3 files require ffmpeg which is not installed. Please upload a WAV file instead.');
+        } else if (error.response?.status === 408 || (error.response?.data.detail && error.response.data.detail.includes('timeout'))) {
+          // Timeout error
+          setError('Audio analysis took too long. Try using a shorter audio file.');
+        } else {
+          // Generic error
+          setError(error.response?.data.detail || 'Failed to analyze audio');
+        }
       } else {
         setError('An unexpected error occurred');
       }
@@ -36,7 +48,7 @@ export const useAudioAnalysis = () => {
   const downloadMidi = async (midiPath: string) => {
     try {
       const response = await axios.get(
-        `/api/download/${encodeURIComponent(midiPath)}`,
+        `/api/audio/download/${encodeURIComponent(midiPath)}`,
         { responseType: 'blob' }
       );
 
@@ -48,6 +60,7 @@ export const useAudioAnalysis = () => {
       link.click();
       link.remove();
     } catch (error) {
+      console.error('Error downloading MIDI:', error);
       if (axios.isAxiosError<ErrorResponse>(error)) {
         setError(error.response?.data.detail || 'Failed to download MIDI file');
       } else {
