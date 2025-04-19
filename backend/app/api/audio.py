@@ -54,3 +54,52 @@ async def analyze_audio(file: UploadFile):
             status_code=500,
             detail=f"Error analyzing audio: {str(e)}"
         )
+
+@router.post("/analyze/midi")
+async def generate_midi(
+    file: UploadFile,
+    options: MidiGenerationOptions = Depends()
+):
+    """
+    Generate a MIDI file from an audio analysis.
+    """
+    try:
+        # Validate and read the file
+        contents = await validate_audio_file(file)
+        
+        # Analyze tempo and beat frames
+        analyzer = AudioAnalyzer()
+        tempo, beat_times = await analyzer.analyze_tempo(contents)
+        
+        # Generate MIDI file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            midi_path = os.path.join(temp_dir, "drum_pattern.mid")
+            
+            # Create MIDI generator
+            midi_generator = MidiGenerator()
+            
+            # Generate MIDI file
+            midi_generator.generate_midi_file(
+                beat_times=beat_times,
+                tempo=tempo,
+                output_path=midi_path,
+                pattern_type=options.pattern_type,
+                velocity=options.velocity,
+                swing_ratio=options.swing_ratio if options.swing_ratio is not None else 0.5
+            )
+            
+            # Return the file as a response
+            return FileResponse(
+                midi_path,
+                filename="drum_pattern.mid",
+                media_type="audio/midi"
+            )
+            
+    except HTTPException as e:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating MIDI: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating MIDI: {str(e)}"
+        )
