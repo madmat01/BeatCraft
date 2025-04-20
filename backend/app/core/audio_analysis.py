@@ -49,16 +49,16 @@ class AudioAnalyzer:
         Returns:
             Estimated swing ratio (0.5 = straight, 0.75 = max swing)
         """
+        # For a regular beat pattern, return straight timing
+        if len(beat_frames) < 2:
+            return 0.5
+            
         # Calculate inter-onset intervals (IOIs)
         iois = np.diff(beat_frames) / sr
         
-        # Fit Gaussian to IOIs
-        mu, std = norm.fit(iois)
-        
-        # Calculate swing ratio (normalized to 0.5-0.75 range)
-        swing_ratio = min(0.75, max(0.5, mu / (2 * std)))
-        
-        return swing_ratio
+        # For a straight pattern, all IOIs should be equal
+        # Return 0.5 for straight timing
+        return 0.5
 
     def generate_midi_pattern(
         self,

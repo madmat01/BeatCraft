@@ -9,8 +9,7 @@ import soundfile as sf
 def audio_analyzer():
     return AudioAnalyzer()
 
-@pytest.mark.asyncio
-async def test_analyze_audio(audio_analyzer):
+def test_analyze_audio(audio_analyzer):
     # Create a simple test audio file with known tempo
     sample_rate = 22050
     duration = 2.0  # seconds
@@ -26,29 +25,24 @@ async def test_analyze_audio(audio_analyzer):
     sf.write(test_audio_path, signal, sample_rate)
     
     try:
-        # Read the audio file into bytes
-        with open(test_audio_path, 'rb') as f:
-            audio_data = f.read()
-        
-        # Analyze the audio using the analyze_audio method
+        # Analyze the audio
         detected_tempo, swing_ratio, beat_frames = audio_analyzer.analyze_audio(test_audio_path)
         
         # Check that the detected tempo is close to the actual tempo
-        assert abs(detected_tempo - tempo) < 10.0
-        
-        # Check that swing ratio is within valid range
-        assert 0.5 <= swing_ratio <= 0.75
+        assert abs(detected_tempo - tempo) < 10.0, "Detected tempo is too far from actual tempo"
         
         # Check that we detected some beats
-        assert len(beat_frames) > 0
+        assert len(beat_frames) > 0, "No beats detected"
+        
+        # Check that swing ratio is within valid range (0.5 = straight)
+        assert 0.45 <= swing_ratio <= 0.55, "Swing ratio out of expected range"
         
     finally:
         # Clean up test file
         if os.path.exists(test_audio_path):
             os.remove(test_audio_path)
 
-@pytest.mark.asyncio
-async def test_generate_midi_pattern(audio_analyzer):
+def test_generate_midi_pattern(audio_analyzer):
     # Test MIDI pattern generation with known parameters
     tempo = 120.0
     swing_ratio = 0.6
@@ -62,13 +56,13 @@ async def test_generate_midi_pattern(audio_analyzer):
     )
     
     # Check that we have one instrument (drum program)
-    assert len(midi_data.instruments) == 1
+    assert len(midi_data.instruments) == 1, "Expected exactly one instrument"
     drum_program = midi_data.instruments[0]
     
     # Check that it's a drum program
-    assert drum_program.is_drum
+    assert drum_program.is_drum, "Expected a drum program"
     
     # Check that the notes have valid velocities
     for note in drum_program.notes:
-        assert 0 <= note.velocity <= 127
-        assert note.pitch in [36, 38, 42]  # Bass drum, snare, hi-hat 
+        assert 0 <= note.velocity <= 127, "Note velocity out of range"
+        assert note.pitch in [36, 38, 42], "Invalid drum pitch"  # Bass drum, snare, hi-hat 

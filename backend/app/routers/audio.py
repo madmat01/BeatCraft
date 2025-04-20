@@ -33,9 +33,31 @@ async def analyze_audio(
     try:
         logger.info(f"Analyzing audio file: {file.filename}")
         
+        # Get file content
+        content = await file.read()
+        
+        # Validate file size (50MB limit)
+        if len(content) > 50 * 1024 * 1024:  # 50MB
+            raise HTTPException(
+                status_code=413,
+                detail="File too large. Maximum size is 50MB"
+            )
+        
+        # Validate file type
+        if not file.filename.lower().endswith(('.wav', '.mp3')):
+            raise HTTPException(
+                status_code=415,
+                detail="Only WAV and MP3 files are supported"
+            )
+        
+        if len(content) == 0:
+            raise HTTPException(
+                status_code=415,
+                detail="Empty file"
+            )
+        
         # Save uploaded file to temporary location
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
-            content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
             logger.info(f"Audio file saved to: {temp_file_path}")
