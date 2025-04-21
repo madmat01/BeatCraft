@@ -15,7 +15,7 @@ export const useAudioAnalysis = () => {
       formData.append('file', file);
       formData.append('num_bars', numBars.toString());
 
-      const response = await axios.post<AnalysisResponse>('/api/audio/analyze', formData, {
+      const response = await axios.post<AnalysisResponse>('http://localhost:8000/audio/analyze', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -45,10 +45,20 @@ export const useAudioAnalysis = () => {
     }
   };
 
-  const downloadMidi = async (midiPath: string) => {
+  const downloadMidi = async (numBars: number) => {
     try {
-      const response = await axios.get(
-        `/api/audio/download/${encodeURIComponent(midiPath)}`,
+      if (!analysis) {
+        throw new Error('No analysis available');
+      }
+
+      const formData = new FormData();
+      formData.append('tempo', analysis.tempo.toString());
+      formData.append('swing_ratio', analysis.swing_ratio.toString());
+      formData.append('num_bars', numBars.toString());
+
+      const response = await axios.post(
+        '/api/audio/generate-midi',
+        formData,
         { responseType: 'blob' }
       );
 

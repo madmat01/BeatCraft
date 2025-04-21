@@ -51,7 +51,7 @@ function App() {
     Array(DRUM_SOUNDS.length).fill(null).map(() => Array(16).fill(false))
   );
   const [file, setFile] = useState<File | null>(null);
-  const { loading, error, analysis, analyzeAudio, setError } = useAudioAnalysis();
+  const { loading, error, analysis, analyzeAudio, downloadMidi, setError } = useAudioAnalysis();
 
   const toggleStep = (soundIndex: number, stepIndex: number) => {
     const newSteps = [...steps];
@@ -177,9 +177,20 @@ function App() {
               )}
               
               {analysis && (
-                <Alert severity="success" sx={{ mt: 2 }}>
-                  Analysis complete! Tempo: {analysis.tempo.toFixed(1)} BPM, Swing: {(analysis.swing_ratio * 100).toFixed(1)}%
-                </Alert>
+                <Box>
+                  <Alert severity="success" sx={{ mb: 2 }}>
+                    Analysis complete! Tempo: {analysis.tempo.toFixed(1)} BPM, Swing: {(analysis.swing_ratio * 100).toFixed(1)}%
+                  </Alert>
+                  <Button
+                    variant="outlined"
+                    onClick={() => downloadMidi(4)}
+                    fullWidth
+                    size="large"
+                    sx={{ mb: 2 }}
+                  >
+                    Download MIDI Pattern
+                  </Button>
+                </Box>
               )}
             </Box>
           )}
