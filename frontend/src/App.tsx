@@ -183,7 +183,7 @@ function App() {
                   </Alert>
                   <Button
                     variant="outlined"
-                    onClick={() => downloadMidi(4)}
+                    onClick={() => downloadMidi()}
                     fullWidth
                     size="large"
                     sx={{ mb: 2 }}

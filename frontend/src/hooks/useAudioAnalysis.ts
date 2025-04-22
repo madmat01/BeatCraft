@@ -45,20 +45,22 @@ export const useAudioAnalysis = () => {
     }
   };
 
-  const downloadMidi = async (numBars: number) => {
+  const downloadMidi = async () => {
     try {
       if (!analysis) {
         throw new Error('No analysis available');
       }
 
-      const formData = new FormData();
-      formData.append('tempo', analysis.tempo.toString());
-      formData.append('swing_ratio', analysis.swing_ratio.toString());
-      formData.append('num_bars', numBars.toString());
+      // The MIDI file path is already available in the analysis response
+      if (!analysis.midi_path) {
+        throw new Error('MIDI path not available');
+      }
 
-      const response = await axios.post(
-        '/api/audio/generate-midi',
-        formData,
+      // Encode the path for URL safety
+      const encodedPath = encodeURIComponent(analysis.midi_path);
+      
+      const response = await axios.get(
+        `http://localhost:8000/audio/download/${encodedPath}`,
         { responseType: 'blob' }
       );
 
