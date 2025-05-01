@@ -1,0 +1,11 @@
+Add dual playback system for synchronized audio and drum sequencer
+
+This commit adds the following features:
+1. New DualPlayback component that synchronizes original audio with the drum sequencer
+2. Integration with Tone.js transport for sample-accurate synchronization
+3. Volume control for the original audio file
+4. Updated useDrumSequencer hook with external transport access
+5. Comprehensive test coverage for the new functionality
+6. Updated todo.md to reflect completed and new tasks
+
+This implementation allows users to hear their original audio alongside the generated drum pattern, providing a more complete music production experience.

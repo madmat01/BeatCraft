@@ -123,6 +123,32 @@ async def analyze_audio(
                 hat = pretty_midi.Note(velocity=80, pitch=42, start=beat_time, end=beat_time + 0.1)
                 drum_program.notes.append(hat)
             
+            # Extract pattern data for the frontend
+            pattern_data = []
+            # Map MIDI notes to drum types (0: kick, 1: snare, 2: hihat, 3: clap)
+            drum_note_map = {
+                36: 0,  # Kick drum
+                38: 1,  # Snare drum
+                42: 2,  # Hi-hat
+                39: 3,  # Clap/Handclap
+            }
+            
+            # Calculate time divisions based on tempo
+            beat_duration = 60 / tempo  # Duration of one beat in seconds
+            sixteenth_duration = beat_duration / 4  # Duration of a 16th note
+            
+            # Initialize empty pattern (4 drum types x 16 steps)
+            pattern = [[False for _ in range(16)] for _ in range(4)]
+            
+            # Fill in the pattern based on note timings
+            for note in drum_program.notes:
+                if note.pitch in drum_note_map:
+                    drum_index = drum_note_map[note.pitch]
+                    # Calculate which step this note falls on (quantize to 16th notes)
+                    step_index = round(note.start / sixteenth_duration) % 16
+                    if 0 <= step_index < 16:
+                        pattern[drum_index][step_index] = True
+            
             # Add the drum instrument to the MIDI file
             midi.instruments.append(drum_program)
             
@@ -139,7 +165,8 @@ async def analyze_audio(
             return {
                 "tempo": tempo,
                 "swing_ratio": swing_ratio,
-                "midi_path": midi_path
+                "midi_path": midi_path,
+                "pattern": pattern
             }
             
         except ValueError as ve:
