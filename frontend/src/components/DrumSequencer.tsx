@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useImperativeHandle, forwardRef } from 'react';
 import { 
   Box, 
   Stack, 
@@ -8,14 +8,22 @@ import {
   Paper,
   Tooltip,
   CircularProgress,
-  Alert
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Grid
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
-import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import SpeedIcon from '@mui/icons-material/Speed';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
-import { useDrumSequencer, DrumSoundType } from '../hooks/useDrumSequencer';
+import SettingsIcon from '@mui/icons-material/Settings';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import { useDrumSequencer, DrumSoundType, DrumStep } from '../hooks/useDrumSequencer';
 
 // Define drum sound info
 interface DrumSound {
@@ -48,23 +56,24 @@ export const DrumSequencer = React.forwardRef<{
   initialPattern,
   externalPlayState,
 }, ref) => {
-  const {
-    isPlaying,
-    currentStep,
-    bpm,
-    swing,
-    steps,
-    volume,
-    togglePlay,
-    stop,
-    setBpm,
-    setSwing,
+  const { 
+    isPlaying, 
+    currentStep, 
+    bpm, 
+    swing, 
+    steps, 
+    volume, 
+    togglePlay, 
+    stop, 
+    setBpm, 
+    setSwing, 
     toggleStep,
+    setStepVelocity,
     setVolume,
     playSound,
-    setPattern,
     samplesLoaded,
     samplesError,
+    setPattern
   } = useDrumSequencer(initialBpm, initialSwing);
 
   // Load initial pattern if provided
@@ -106,20 +115,81 @@ export const DrumSequencer = React.forwardRef<{
     }
   }, [externalPlayState, isPlaying, togglePlay, stop, samplesLoaded]);
   
+  // State for step editor dialog
+  const [selectedStep, setSelectedStep] = React.useState<{ soundIndex: number; stepIndex: number } | null>(null);
+  const [stepEditorOpen, setStepEditorOpen] = React.useState(false);
+  
+  // Handle velocity change in the editor
+  const handleVelocityChange = (value: number) => {
+    if (selectedStep) {
+      setStepVelocity(selectedStep.soundIndex, selectedStep.stepIndex, value);
+    }
+  };
+  
+
+  
+  // Handle closing the step editor dialog
+  const handleCloseStepEditor = () => {
+    setStepEditorOpen(false);
+    setSelectedStep(null);
+  };
+  
+  // Get sound type from index
+  const getSoundType = (soundIndex: number): DrumSoundType => {
+    return DRUM_SOUNDS[soundIndex].type;
+  };
+  
   return (
     <Paper sx={{ p: 3, mb: 4 }}>
       {/* Show loading state or error if samples aren't loaded */}
-      {!samplesLoaded && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
-          <CircularProgress sx={{ mb: 2 }} />
-          <Typography variant="body1">Loading drum samples...</Typography>
+      {!samplesLoaded && !samplesError && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+          <CircularProgress />
+          <Typography sx={{ ml: 2 }}>Loading drum samples...</Typography>
         </Box>
       )}
       
       {samplesError && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
           {samplesError}
         </Alert>
+      )}
+      
+      {/* Step Editor Dialog */}
+      {selectedStep && (
+        <Dialog open={stepEditorOpen} onClose={handleCloseStepEditor}>
+          <DialogTitle>
+            Edit Velocity for {DRUM_SOUNDS[selectedStep.soundIndex].name} Step {selectedStep.stepIndex + 1}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ width: 300, mt: 2 }}>
+              <Typography gutterBottom>Velocity: {Math.round(steps[selectedStep.soundIndex][selectedStep.stepIndex].velocity * 100)}%</Typography>
+              <Slider
+                value={steps[selectedStep.soundIndex][selectedStep.stepIndex].velocity}
+                onChange={(_, value) => handleVelocityChange(value as number)}
+                min={0}
+                max={1}
+                step={0.01}
+                valueLabelDisplay="auto"
+                valueLabelFormat={(value) => `${Math.round(value as number * 100)}%`}
+              />
+              
+              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+                <Button 
+                  variant="contained" 
+                  onClick={() => {
+                    playSound(DRUM_SOUNDS[selectedStep.soundIndex].type, steps[selectedStep.soundIndex][selectedStep.stepIndex].velocity);
+                  }}
+                >
+                  Test Sound
+                </Button>
+              </Box>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseStepEditor}>Close</Button>
+          </DialogActions>
+        </Dialog>
       )}
       
       <Box sx={{ mb: 3 }}>
@@ -207,25 +277,37 @@ export const DrumSequencer = React.forwardRef<{
               </Typography>
             </Tooltip>
             {Array(16).fill(null).map((_, stepIndex) => (
-              <Box
+              <Box 
                 key={stepIndex}
                 onClick={() => toggleStep(soundIndex, stepIndex)}
                 sx={{
                   width: 40,
                   height: 40,
-                  bgcolor: steps[soundIndex][stepIndex] 
-                    ? sound.color 
-                    : 'background.paper',
+                  position: 'relative',
+                  bgcolor: steps[soundIndex][stepIndex].active ? sound.color : 'background.paper',
                   border: '1px solid',
-                  borderColor: currentStep === stepIndex && isPlaying
-                    ? 'primary.main'
-                    : 'divider',
+                  borderColor: currentStep === stepIndex && isPlaying ? 'primary.main' : 'divider',
                   cursor: 'pointer',
                   '&:hover': {
-                    bgcolor: steps[soundIndex][stepIndex]
-                      ? `${sound.color}dd`
-                      : 'action.hover'
-                  }
+                    bgcolor: steps[soundIndex][stepIndex].active ? `${sound.color}dd` : 'action.hover',
+                  },
+                  // Show velocity as a vertical fill
+                  '&::after': steps[soundIndex][stepIndex].active ? {
+                    content: '""',
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: `${steps[soundIndex][stepIndex].velocity * 100}%`,
+                    backgroundColor: 'rgba(255,255,255,0.3)',
+                    pointerEvents: 'none',
+                  } : {},
+
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setSelectedStep({ soundIndex, stepIndex });
+                  setStepEditorOpen(true);
                 }}
               />
             ))}

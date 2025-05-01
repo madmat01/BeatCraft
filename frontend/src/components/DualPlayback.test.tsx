@@ -130,6 +130,59 @@ describe('DualPlayback', () => {
     expect(Tone.Transport.stop).toHaveBeenCalled();
   });
 
+  it('handles stop button click with sample-accurate sync', async () => {
+    // Mock Tone.now() to return a consistent value for testing
+    const mockNow = 123.456;
+    vi.spyOn(Tone, 'now').mockReturnValue(mockNow);
+    
+    render(<DualPlayback audioUrl="test.mp3" />);
+    
+    // First play, then stop
+    const playButton = screen.getByText(/play/i);
+    fireEvent.click(playButton);
+    
+    // Wait for play to complete
+    await waitFor(() => {
+      expect(Tone.Transport.start).toHaveBeenCalled();
+    });
+    
+    // Now the button should show "Stop"
+    const stopButton = screen.getByText(/stop/i);
+    fireEvent.click(stopButton);
+    
+    // Check if Transport was stopped with precise timing
+    expect(Tone.Transport.stop).toHaveBeenCalledWith(mockNow);
+    
+    // Verify that the player was stopped with precise timing
+    const playerInstance = vi.mocked(Tone.Player).mock.instances[0];
+    expect(playerInstance.stop).toHaveBeenCalledWith(mockNow);
+  });
+
+  it('should handle play button click with sample-accurate sync', async () => {
+    // Mock Tone.now() to return a consistent value for testing
+    const mockNow = 123.456;
+    vi.mocked(Tone.now).mockReturnValue(mockNow);
+    
+    render(<DualPlayback audioUrl="test.mp3" />);
+    
+    // Find and click the play button
+    const playButton = screen.getByText(/play/i);
+    fireEvent.click(playButton);
+    
+    // Check if Tone.start was called
+    await waitFor(() => {
+      expect(Tone.start).toHaveBeenCalled();
+    });
+    
+    // Check if Transport was started with precise timing
+    expect(Tone.Transport.start).toHaveBeenCalledWith(mockNow);
+    
+    // Verify that the player was configured for sample-accurate sync
+    const playerInstance = vi.mocked(Tone.Player).mock.instances[0];
+    expect(playerInstance.sync).toHaveBeenCalled();
+    expect(playerInstance.start).toHaveBeenCalledWith(mockNow);
+  });
+
   it('handles volume change', async () => {
     // Mock the Tone.Buffer.fromUrl to resolve immediately
     vi.mocked(Tone.Buffer.fromUrl).mockResolvedValueOnce({

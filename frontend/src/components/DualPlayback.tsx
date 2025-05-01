@@ -116,12 +116,20 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
       if (audioBuffer && !playerRef.current) {
         console.log('Creating new player with loaded buffer');
         // Create player with the already loaded buffer
-        playerRef.current = new Tone.Player(audioBuffer);
+        playerRef.current = new Tone.Player({
+          url: audioBuffer,
+          // Enable precise scheduling for sample-accurate sync
+          fadeIn: 0,
+          fadeOut: 0,
+          // Ensure the player is ready immediately
+          onload: () => console.log('Player loaded and ready for precise sync')
+        });
+        
         playerRef.current.volume.value = Tone.gainToDb(audioVolume);
         playerRef.current.toDestination();
         
         // Give the player a moment to initialize
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
       
       // Start the audio player if it exists
@@ -129,19 +137,28 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
         try {
           // Make sure the player is loaded before starting
           if (playerRef.current.loaded) {
-            // Start transport first, then player
-            Tone.Transport.start();
+            // Use precise scheduling for sample-accurate sync
+            // Schedule the start time explicitly to ensure sync
+            const startTime = Tone.now();
             
             // Start the player in sync with the transport
-            playerRef.current.sync().start(0);
-            console.log('Started audio player in sync with transport');
+            playerRef.current.sync();
+            
+            // Start transport with precise timing
+            Tone.Transport.start(startTime);
+            playerRef.current.start(startTime);
+            
+            console.log('Started audio player with sample-accurate sync at time:', startTime);
           } else {
             console.log('Player not loaded yet, waiting for load event');
-            // Create a one-time load handler
+            // Create a one-time load handler with precise timing
             const onceLoaded = () => {
               if (playerRef.current) {
-                playerRef.current.sync().start(0);
-                console.log('Player loaded and started in sync');
+                const startTime = Tone.now();
+                playerRef.current.sync();
+                Tone.Transport.start(startTime);
+                playerRef.current.start(startTime);
+                console.log('Player loaded and started with sample-accurate sync at time:', startTime);
               }
             };
             
@@ -149,11 +166,11 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
             setTimeout(() => {
               if (playerRef.current && playerRef.current.loaded) {
                 onceLoaded();
+              } else {
+                // If still not loaded, start transport anyway for drums
+                Tone.Transport.start();
               }
-            }, 300);
-            
-            // Start transport anyway for drums
-            Tone.Transport.start();
+            }, 100);
           }
         } catch (e) {
           console.error('Error starting player:', e);
@@ -182,22 +199,40 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
 
   // Handle stop button click
   const handleStop = () => {
-    // Stop Tone.js transport
-    Tone.Transport.stop();
-    Tone.Transport.position = 0;
-    
-    // Stop audio player if it exists
-    if (playerRef.current) {
-      try {
-        playerRef.current.stop();
-      } catch (err) {
-        console.error('Error stopping player:', err);
+    try {
+      // Calculate precise stop time for sample-accurate stopping
+      const stopTime = Tone.now();
+      
+      // Stop audio player if it exists with precise timing
+      if (playerRef.current) {
+        playerRef.current.stop(stopTime);
       }
+      
+      // Stop Tone.js transport with the same timing
+      Tone.Transport.stop(stopTime);
+      Tone.Transport.position = 0;
+      
+      setIsPlaying(false);
+      if (onPlayStateChange) onPlayStateChange(false);
+      console.log('Playback stopped with sample-accurate timing at:', stopTime);
+    } catch (err) {
+      console.error('Error during synchronized stop:', err);
+      
+      // Fallback to immediate stop if precise timing fails
+      if (playerRef.current) {
+        try {
+          playerRef.current.stop();
+        } catch (playerErr) {
+          console.error('Error stopping player:', playerErr);
+        }
+      }
+      
+      Tone.Transport.stop();
+      Tone.Transport.position = 0;
+      
+      setIsPlaying(false);
+      if (onPlayStateChange) onPlayStateChange(false);
     }
-    
-    setIsPlaying(false);
-    if (onPlayStateChange) onPlayStateChange(false);
-    console.log('Playback stopped');
   };
 
   // Handle volume change

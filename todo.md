@@ -44,12 +44,10 @@
 - [x] Integrate Tone.js for sample playback and transport control  
 - [x] Build Swing/Shuffle slider component linked to Tone.Transport.swing  
 - [x] Implement step sequencer grid with per-instrument rows and time columns  
-- [ ] **Add original audio file playback**  
-  - Implement dual playback system (drum sequencer + original audio)  
-  - Create unified play/pause button for synchronized playback  
-  - Add audio file volume slider in mixer panel  
-- [ ] Ensure sample-accurate sync between drum MIDI and original audio  
-- [ ] Add velocity and probability controls per drum component  
+- [x] Add original audio file playback
+- [x] Improve sample-accurate sync between drum MIDI and original audio
+- [x] Add velocity controls per drum component  
+- [ ] Add audio file volume slider in mixer panel  
 
 ### 3.3 Sample Library & Assignment
 

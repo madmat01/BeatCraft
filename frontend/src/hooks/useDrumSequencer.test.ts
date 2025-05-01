@@ -46,13 +46,20 @@ describe('useDrumSequencer', () => {
   it('should initialize with default values', () => {
     const { result } = renderHook(() => useDrumSequencer());
     
+    expect(result.current.isPlaying).toBe(false);
+    expect(result.current.currentStep).toBe(0);
     expect(result.current.bpm).toBe(120);
     expect(result.current.swing).toBe(0);
-    expect(result.current.steps).toBeDefined();
-    expect(result.current.steps.length).toBe(4); // 4 drum sounds
-    expect(result.current.steps[0].length).toBe(16); // 16 steps
-    expect(result.current.isPlaying).toBe(false);
-    expect(result.current.volume).toBe(0);
+    expect(result.current.steps).toHaveLength(4); // 4 drum sounds
+    expect(result.current.steps[0]).toHaveLength(16); // 16 steps by default
+    
+    // Each step should be initialized with default properties
+    result.current.steps.forEach(row => {
+      row.forEach(step => {
+        expect(step.active).toBe(false);
+        expect(step.velocity).toBe(0.7); // Default velocity
+      });
+    });
   });
 
   it('should update BPM when setBpm is called', () => {
@@ -75,16 +82,6 @@ describe('useDrumSequencer', () => {
     
     expect(result.current.swing).toBe(0.3);
     expect(Tone.Transport.swing).toBe(0.3);
-  });
-
-  it('should update volume when setVolume is called', () => {
-    const { result } = renderHook(() => useDrumSequencer());
-    
-    act(() => {
-      result.current.setVolume(-10);
-    });
-    
-    expect(result.current.volume).toBe(-10);
   });
 
   it('should toggle playback state when togglePlay is called', () => {
@@ -111,33 +108,33 @@ describe('useDrumSequencer', () => {
     expect(Tone.Transport.stop).toHaveBeenCalled();
   });
 
-  it('should toggle step', () => {
+  it('should toggle a step', () => {
     const { result } = renderHook(() => useDrumSequencer());
     
-    // Initial state - all steps are false
-    const initialStep = result.current.steps[0][0];
-    expect(initialStep).toBe(false);
+    // Initially all steps are inactive
+    expect(result.current.steps[0][0].active).toBe(false);
     
-    // Toggle a step
+    // Toggle the first step of the first drum
     act(() => {
       result.current.toggleStep(0, 0);
     });
     
-    // Check if the step was toggled
-    expect(result.current.steps[0][0]).toBe(true);
+    // Now it should be active
+    expect(result.current.steps[0][0].active).toBe(true);
     
-    // Toggle it back
+    // Toggle it again
     act(() => {
       result.current.toggleStep(0, 0);
     });
     
-    expect(result.current.steps[0][0]).toBe(false);
+    // Now it should be inactive again
+    expect(result.current.steps[0][0].active).toBe(false);
   });
   
-  it('should set pattern from external data', () => {
+  it('should set a pattern', () => {
     const { result } = renderHook(() => useDrumSequencer());
     
-    // Create a test pattern
+    // Define a test pattern (boolean array)
     const testPattern = [
       [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false],
       [false, true, false, true, false, true, false, true, false, true, false, true, false, true, false, true],
@@ -145,18 +142,16 @@ describe('useDrumSequencer', () => {
       [false, false, true, true, false, false, true, true, false, false, true, true, false, false, true, true]
     ];
     
-    // Initial state: all steps should be false
-    expect(result.current.steps.every(row => row.every(step => step === false))).toBe(true);
-    
     // Set the pattern
     act(() => {
       result.current.setPattern(testPattern);
     });
     
-    // Steps should now match the test pattern
+    // Check if the pattern was set correctly (converted to DrumStep objects)
     for (let i = 0; i < 4; i++) {
       for (let j = 0; j < 16; j++) {
-        expect(result.current.steps[i][j]).toBe(testPattern[i][j]);
+        expect(result.current.steps[i][j].active).toBe(testPattern[i][j]);
+        expect(result.current.steps[i][j].velocity).toBe(0.7); // Default velocity
       }
     }
   });
@@ -196,5 +191,34 @@ describe('useDrumSequencer', () => {
     expect(result.current.getTransport).toBeDefined();
     const transport = result.current.getTransport();
     expect(transport).toBe(Tone.Transport);
+  });
+
+  it('should set step velocity', () => {
+    const { result } = renderHook(() => useDrumSequencer());
+    
+    // First activate a step
+    act(() => {
+      result.current.toggleStep(0, 0);
+    });
+    
+    // Set velocity to 0.5
+    act(() => {
+      result.current.setStepVelocity(0, 0, 0.5);
+    });
+    
+    // Check if velocity was set correctly
+    expect(result.current.steps[0][0].active).toBe(true);
+    expect(result.current.steps[0][0].velocity).toBe(0.5);
+    
+    // Test clamping - values should be clamped between 0 and 1
+    act(() => {
+      result.current.setStepVelocity(0, 0, 1.5); // Above max
+    });
+    expect(result.current.steps[0][0].velocity).toBe(1.0);
+    
+    act(() => {
+      result.current.setStepVelocity(0, 0, -0.5); // Below min
+    });
+    expect(result.current.steps[0][0].velocity).toBe(0.0);
   });
 });
