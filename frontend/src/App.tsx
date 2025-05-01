@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Box, 
   Container, 
   Typography, 
   Paper,
-  IconButton,
   ThemeProvider,
   createTheme,
   CssBaseline,
@@ -14,10 +13,10 @@ import {
   Alert
 } from '@mui/material';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import StopIcon from '@mui/icons-material/Stop';
 import { FileUpload } from './components/FileUpload';
 import { useAudioAnalysis } from './hooks/useAudioAnalysis';
+import DrumSequencer from './components/DrumSequencer';
+import DualPlayback from './components/DualPlayback';
 
 // Create a dark theme
 const darkTheme = createTheme({
@@ -36,38 +35,42 @@ const darkTheme = createTheme({
   },
 });
 
-// Define drum sounds
-const DRUM_SOUNDS = [
-  { name: 'Kick', color: '#f48fb1' },
-  { name: 'Snare', color: '#90caf9' },
-  { name: 'Hi-Hat', color: '#81c784' },
-  { name: 'Clap', color: '#ffb74d' },
-];
+
 
 function App() {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [steps, setSteps] = useState<boolean[][]>(
-    Array(DRUM_SOUNDS.length).fill(null).map(() => Array(16).fill(false))
-  );
   const [file, setFile] = useState<File | null>(null);
+  const [sequencerBpm, setSequencerBpm] = useState<number | null>(null);
+  const [sequencerSwing, setSequencerSwing] = useState<number | null>(null);
+  const [sequencerPattern, setSequencerPattern] = useState<boolean[][] | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const drumSequencerRef = useRef<any>(null);
   const { loading, error, analysis, analyzeAudio, downloadMidi, setError } = useAudioAnalysis();
 
-  const toggleStep = (soundIndex: number, stepIndex: number) => {
-    const newSteps = [...steps];
-    newSteps[soundIndex][stepIndex] = !newSteps[soundIndex][stepIndex];
-    setSteps(newSteps);
-  };
-
-  const handlePlay = () => {
-    setIsPlaying(true);
-    // TODO: Implement actual audio playback
-  };
-
-  const handleStop = () => {
-    setIsPlaying(false);
-    setCurrentStep(0);
-  };
+  // Update sequencer parameters when analysis is complete
+  useEffect(() => {
+    if (analysis) {
+      setSequencerBpm(analysis.tempo);
+      setSequencerSwing(analysis.swing_ratio);
+      
+      // Check if pattern data is available
+      if (analysis.pattern && Array.isArray(analysis.pattern)) {
+        setSequencerPattern(analysis.pattern);
+        console.log('MIDI pattern loaded from analysis:', analysis.pattern);
+      }
+      
+      // Create object URL for the original audio file if available
+      if (file) {
+        const url = URL.createObjectURL(file);
+        setAudioUrl(url);
+        
+        // Clean up the URL when component unmounts
+        return () => {
+          URL.revokeObjectURL(url);
+        };
+      }
+    }
+  }, [analysis, file]);
 
   const handleFileSelected = (selectedFile: File) => {
     setFile(selectedFile);
@@ -91,61 +94,41 @@ function App() {
             </Typography>
           </Stack>
           
-          <Paper sx={{ p: 3, mb: 4 }}>
-            <Box sx={{ mb: 3 }}>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <IconButton 
-                  onClick={isPlaying ? handleStop : handlePlay}
-                  color="primary"
-                  size="large"
-                >
-                  {isPlaying ? <StopIcon /> : <PlayArrowIcon />}
-                </IconButton>
-                <Typography variant="h6">
-                  {isPlaying ? 'Stop' : 'Play'}
-                </Typography>
-              </Stack>
-            </Box>
-            
-            {DRUM_SOUNDS.map((sound, soundIndex) => (
-              <Box key={sound.name} sx={{ mb: 2 }}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography 
-                    variant="body1" 
-                    sx={{ 
-                      width: 100,
-                      color: sound.color 
-                    }}
-                  >
-                    {sound.name}
-                  </Typography>
-                  {Array(16).fill(null).map((_, stepIndex) => (
-                    <Box
-                      key={stepIndex}
-                      onClick={() => toggleStep(soundIndex, stepIndex)}
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        bgcolor: steps[soundIndex][stepIndex] 
-                          ? sound.color 
-                          : 'background.paper',
-                        border: '1px solid',
-                        borderColor: currentStep === stepIndex && isPlaying
-                          ? 'primary.main'
-                          : 'divider',
-                        cursor: 'pointer',
-                        '&:hover': {
-                          bgcolor: steps[soundIndex][stepIndex]
-                            ? `${sound.color}dd`
-                            : 'action.hover'
-                        }
-                      }}
-                    />
-                  ))}
-                </Stack>
-              </Box>
-            ))}
-          </Paper>
+          {sequencerBpm && sequencerSwing ? (
+            <>
+              <DualPlayback 
+                audioUrl={audioUrl || undefined}
+                bpm={sequencerBpm}
+                onPlayStateChange={(playing) => {
+                  setIsPlaying(playing);
+                  // Coordinate with DrumSequencer
+                  if (drumSequencerRef.current) {
+                    if (playing) {
+                      drumSequencerRef.current.startPlayback();
+                    } else {
+                      drumSequencerRef.current.stopPlayback();
+                    }
+                  }
+                }}
+              />
+              <DrumSequencer 
+                initialBpm={sequencerBpm} 
+                initialSwing={sequencerSwing}
+                initialPattern={sequencerPattern || undefined}
+                ref={drumSequencerRef}
+                externalPlayState={isPlaying}
+              />
+            </>
+          ) : (
+            <Paper sx={{ p: 3, mb: 4 }}>
+              <Typography variant="h6" gutterBottom>
+                Drum Sequencer
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                Upload and analyze an audio file to initialize the drum sequencer with the detected tempo and swing.
+              </Typography>
+            </Paper>
+          )}
 
           <Typography variant="h5" gutterBottom>
             Upload Audio to Analyze

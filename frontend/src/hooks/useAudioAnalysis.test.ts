@@ -1,7 +1,30 @@
-import { renderHook } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import axios from 'axios';
 import { useAudioAnalysis } from './useAudioAnalysis';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, beforeAll } from 'vitest';
+import { API_URLS } from '../config';
+
+// Mock global URL and document objects
+beforeAll(() => {
+  // Mock URL.createObjectURL
+  global.URL = {
+    createObjectURL: vi.fn(() => 'mock-blob-url'),
+    revokeObjectURL: vi.fn(),
+  } as unknown as typeof global.URL;
+  
+  // Mock document.createElement
+  global.document.createElement = vi.fn().mockImplementation((tag) => {
+    if (tag === 'a') {
+      return {
+        href: '',
+        setAttribute: vi.fn(),
+        click: vi.fn(),
+        remove: vi.fn()
+      } as unknown as HTMLAnchorElement;
+    }
+    return document.createElement(tag);
+  });
+});
 
 // Mock axios
 vi.mock('axios');
@@ -17,12 +40,18 @@ describe('useAudioAnalysis', () => {
   });
 
   it('should analyze audio successfully', async () => {
-    // Mock successful response
+    // Mock successful response with pattern data
     vi.mocked(axios.post).mockResolvedValueOnce({
       data: {
         tempo: 120,
         swing_ratio: 0.5,
-        midi_path: '/path/to/midi.mid'
+        midi_path: '/path/to/midi.mid',
+        pattern: [
+          [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false],
+          [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false],
+          [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false],
+          [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]
+        ]
       }
     });
 
@@ -32,7 +61,9 @@ describe('useAudioAnalysis', () => {
     const file = new File(['dummy content'], 'audio.wav', { type: 'audio/wav' });
     
     // Call the analyze function
-    await result.current.analyzeAudio(file, 4);
+    await act(async () => {
+      await result.current.analyzeAudio(file, 4);
+    });
     
     // Check if axios.post was called
     expect(axios.post).toHaveBeenCalled();
@@ -41,7 +72,13 @@ describe('useAudioAnalysis', () => {
     expect(result.current.analysis).toEqual({
       tempo: 120,
       swing_ratio: 0.5,
-      midi_path: '/path/to/midi.mid'
+      midi_path: '/path/to/midi.mid',
+      pattern: [
+        [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false],
+        [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false],
+        [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false],
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]
+      ]
     });
   });
 
@@ -51,18 +88,9 @@ describe('useAudioAnalysis', () => {
       data: new Blob(['midi data'], { type: 'audio/midi' })
     });
 
-    // Create a spy for URL.createObjectURL
-    const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'mock-url');
-    
-    // Create a spy for document.createElement to avoid actual DOM manipulation
-    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation(() => {
-      return {
-        href: '',
-        setAttribute: vi.fn(),
-        click: vi.fn(),
-        remove: vi.fn()
-      } as unknown as HTMLAnchorElement;
-    });
+    // Create spies for our already mocked global functions
+    const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL');
+    const createElementSpy = vi.spyOn(document, 'createElement');
 
     const { result } = renderHook(() => useAudioAnalysis());
     
@@ -72,20 +100,30 @@ describe('useAudioAnalysis', () => {
       data: {
         tempo: 120,
         swing_ratio: 0.5,
-        midi_path: '/path/to/midi.mid'
+        midi_path: '/path/to/midi.mid',
+        pattern: [
+          [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false],
+          [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false],
+          [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false],
+          [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]
+        ]
       }
     });
     
     // Create a mock file and analyze it to set the state
     const file = new File(['dummy content'], 'audio.wav', { type: 'audio/wav' });
-    await result.current.analyzeAudio(file, 4);
+    await act(async () => {
+      await result.current.analyzeAudio(file, 4);
+    });
     
     // Call the download function
-    await result.current.downloadMidi();
+    await act(async () => {
+      await result.current.downloadMidi();
+    });
     
     // Check if axios.get was called with correct parameters
     expect(axios.get).toHaveBeenCalledWith(
-      'http://localhost:8000/audio/download/%2Fpath%2Fto%2Fmidi.mid',
+      API_URLS.DOWNLOAD_MIDI('/path/to/midi.mid'),
       { responseType: 'blob' }
     );
     

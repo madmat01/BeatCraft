@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { AnalysisResponse, ErrorResponse } from '../types/api';
+import { API_URLS } from '../config';
 
 export const useAudioAnalysis = () => {
   const [loading, setLoading] = useState(false);
@@ -15,7 +16,7 @@ export const useAudioAnalysis = () => {
       formData.append('file', file);
       formData.append('num_bars', numBars.toString());
 
-      const response = await axios.post<AnalysisResponse>('http://localhost:8000/audio/analyze', formData, {
+      const response = await axios.post<AnalysisResponse>(API_URLS.ANALYZE_AUDIO, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -56,11 +57,8 @@ export const useAudioAnalysis = () => {
         throw new Error('MIDI path not available');
       }
 
-      // Encode the path for URL safety
-      const encodedPath = encodeURIComponent(analysis.midi_path);
-      
       const response = await axios.get(
-        `http://localhost:8000/audio/download/${encodedPath}`,
+        API_URLS.DOWNLOAD_MIDI(analysis.midi_path),
         { responseType: 'blob' }
       );
 
