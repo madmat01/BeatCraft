@@ -81,3 +81,60 @@ def test_api_endpoint_validation():
     # large_file = b"0" * (51 * 1024 * 1024)  # 51MB
     # response = client.post("/audio/analyze", files={"file": ("test.wav", large_file)})
     # assert response.status_code == 413
+
+def test_transient_detection():
+    """Test transient detection on a synthetic audio signal"""
+    # Create test audio with a clear transient at a specific time
+    y, sr = create_test_audio(duration=3, bpm=120)
+    
+    # Add a strong transient at 0.5 seconds
+    transient_time = 0.5  # seconds
+    transient_idx = int(transient_time * sr)
+    y[transient_idx:transient_idx+200] = 2.0  # Strong transient
+    
+    # Convert to WAV bytes using memory buffer
+    import scipy.io.wavfile as wav
+    import io
+    
+    buffer = io.BytesIO()
+    wav.write(buffer, sr, y.astype(np.float32))
+    audio_bytes = buffer.getvalue()
+    
+    # Test the analyzer
+    analyzer = AudioAnalyzer()
+    
+    # Run the async function in a synchronous test
+    import asyncio
+    detected_transient = asyncio.run(analyzer.detect_first_transient(audio_bytes))
+    
+    # Allow for some deviation in transient detection (within 100ms)
+    assert abs(detected_transient - transient_time) < 0.1
+
+def test_transient_detection_endpoint():
+    """Test the transient detection API endpoint"""
+    # Create test audio with a clear transient
+    y, sr = create_test_audio(duration=2, bpm=120)
+    
+    # Add a strong transient at 0.5 seconds
+    transient_time = 0.5  # seconds
+    transient_idx = int(transient_time * sr)
+    y[transient_idx:transient_idx+200] = 2.0  # Strong transient
+    
+    # Convert to WAV bytes
+    import scipy.io.wavfile as wav
+    import io
+    
+    buffer = io.BytesIO()
+    wav.write(buffer, sr, y.astype(np.float32))
+    audio_bytes = buffer.getvalue()
+    
+    # Test the API endpoint
+    response = client.post("/audio/detect-transient", files={"file": ("test.wav", audio_bytes)})
+    
+    # Check response
+    assert response.status_code == 200
+    data = response.json()
+    assert "first_transient_time" in data
+    
+    # Allow for some deviation in transient detection (within 100ms)
+    assert abs(data["first_transient_time"] - transient_time) < 0.1

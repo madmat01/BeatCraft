@@ -5,6 +5,10 @@ export interface AnalysisResponse {
   pattern: boolean[][];
 }
 
+export interface TransientDetectionResponse {
+  first_transient_time: number;
+}
+
 export interface ErrorResponse {
   detail: string;
 }

@@ -46,14 +46,21 @@
 - [x] Implement step sequencer grid with per-instrument rows and time columns  
 - [x] Add original audio file playback
 - [x] Improve sample-accurate sync between drum MIDI and original audio
-- [x] Add velocity controls per drum component  
-- [ ] Add audio file volume slider in mixer panel  
+- [x] Add velocity controls per drum component
 
 ### 3.3 Sample Library & Assignment
 
 - [ ] Create sample browser UI with categorized default kits  
 - [ ] Implement drag-and-drop sample assignment to drum pads  
 - [ ] Add sample preview on hover and playback on selection  
+
+### 3.4 Audio Synchronization Adjustment (New)
+
+- [ ] Implement transient alignment logic to detect first transient in original audio  
+- [ ] Add a "Start Time Offset" dial/slider to manually fine-tune audio playback start time relative to drum sequencer  
+- [ ] Modify playback logic to apply user-defined offset to the original audio start time  
+- [ ] Provide visual feedback showing transient markers on waveform and drum grid for easier alignment  
+- [ ] Ensure offset adjustments update in real-time during playback for precise syncing  
 
 ---
 

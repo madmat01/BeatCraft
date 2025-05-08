@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as Tone from 'tone';
-import { Box, Stack, Typography, Slider, IconButton, Paper, Tooltip } from '@mui/material';
+import { Box, Stack, Typography, Slider, IconButton, Paper, Tooltip, Button } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import apiService from '../services/api';
 
 interface DualPlaybackProps {
   audioUrl?: string;
+  audioFile?: File;
   bpm?: number | null;
   onPlayStateChange?: (isPlaying: boolean) => void;
 }
@@ -17,6 +21,7 @@ interface DualPlaybackProps {
  */
 export const DualPlayback: React.FC<DualPlaybackProps> = ({
   audioUrl,
+  audioFile,
   bpm = 120,
   onPlayStateChange
 }) => {
@@ -31,6 +36,12 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
   const playerRef = useRef<Tone.Player | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Audio synchronization state
+  const [startOffset, setStartOffset] = useState(0); // in seconds, can be negative
+  const [firstTransientTime, setFirstTransientTime] = useState<number | null>(null);
+  const [isDetectingTransient, setIsDetectingTransient] = useState(false);
+  const [showTransientHelp, setShowTransientHelp] = useState(false);
 
   // Initialize Tone.js context on component mount
   useEffect(() => {
@@ -98,6 +109,30 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
     };
   }, [audioUrl]);
 
+  // Detect first transient when audio file changes
+  useEffect(() => {
+    if (!audioFile) return;
+    
+    const detectTransient = async () => {
+      try {
+        setIsDetectingTransient(true);
+        setError(null);
+        
+        const response = await apiService.detectFirstTransient(audioFile);
+        setFirstTransientTime(response.first_transient_time);
+        console.log('First transient detected at:', response.first_transient_time, 'seconds');
+        
+        setIsDetectingTransient(false);
+      } catch (err) {
+        console.error('Error detecting first transient:', err);
+        setError('Failed to detect first transient');
+        setIsDetectingTransient(false);
+      }
+    };
+    
+    detectTransient();
+  }, [audioFile]);
+
   // Handle play button click
   const handlePlay = async () => {
     try {
@@ -144,11 +179,24 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
             // Start the player in sync with the transport
             playerRef.current.sync();
             
-            // Start transport with precise timing
-            Tone.Transport.start(startTime);
-            playerRef.current.start(startTime);
+            // Apply the start offset to the audio playback
+            // If offset is negative, delay the transport start
+            // If offset is positive, delay the audio start
+            if (startOffset < 0) {
+              // Negative offset means audio should start earlier than drums
+              // Start transport with a delay
+              Tone.Transport.start(startTime + Math.abs(startOffset));
+              playerRef.current.start(startTime);
+              console.log('Started audio immediately, delaying transport by:', Math.abs(startOffset), 'seconds');
+            } else {
+              // Positive offset means audio should start later than drums
+              // Start transport immediately, delay audio
+              Tone.Transport.start(startTime);
+              playerRef.current.start(startTime + startOffset);
+              console.log('Started transport immediately, delaying audio by:', startOffset, 'seconds');
+            }
             
-            console.log('Started audio player with sample-accurate sync at time:', startTime);
+            console.log('Started audio player with sample-accurate sync at time:', startTime, 'with offset:', startOffset);
           } else {
             console.log('Player not loaded yet, waiting for load event');
             // Create a one-time load handler with precise timing
@@ -156,9 +204,17 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
               if (playerRef.current) {
                 const startTime = Tone.now();
                 playerRef.current.sync();
-                Tone.Transport.start(startTime);
-                playerRef.current.start(startTime);
-                console.log('Player loaded and started with sample-accurate sync at time:', startTime);
+                
+                // Apply the start offset to the audio playback
+                if (startOffset < 0) {
+                  Tone.Transport.start(startTime + Math.abs(startOffset));
+                  playerRef.current.start(startTime);
+                } else {
+                  Tone.Transport.start(startTime);
+                  playerRef.current.start(startTime + startOffset);
+                }
+                
+                console.log('Player loaded and started with sample-accurate sync at time:', startTime, 'with offset:', startOffset);
               }
             };
             
@@ -249,6 +305,39 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
     }
   };
 
+  // Handle offset change
+  const handleOffsetChange = (_: Event, value: number | number[]) => {
+    const offset = value as number;
+    // Convert from milliseconds to seconds
+    const offsetInSeconds = offset / 1000;
+    setStartOffset(offsetInSeconds);
+    
+    console.log('Audio start offset changed to:', offsetInSeconds, 'seconds');
+    
+    // If currently playing, restart playback with new offset
+    if (isPlaying) {
+      handleStop();
+      // Small delay to ensure everything is stopped
+      setTimeout(() => {
+        handlePlay();
+      }, 100);
+    }
+  };
+
+  // Reset offset to zero
+  const handleResetOffset = () => {
+    setStartOffset(0);
+    
+    // If currently playing, restart playback with reset offset
+    if (isPlaying) {
+      handleStop();
+      // Small delay to ensure everything is stopped
+      setTimeout(() => {
+        handlePlay();
+      }, 100);
+    }
+  };
+
   return (
     <Paper sx={{ p: 3, mb: 4 }}>
       <Typography variant="h6" gutterBottom>
@@ -268,6 +357,23 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
           }} />
           <Typography variant="body2" color="text.secondary">
             Loading audio file...
+          </Typography>
+        </Box>
+      )}
+      
+      {isDetectingTransient && (
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <div className="loading-spinner" style={{ 
+            width: '20px', 
+            height: '20px', 
+            border: '2px solid #f3f3f3',
+            borderTop: '2px solid #3498db',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            marginRight: '8px'
+          }} />
+          <Typography variant="body2" color="text.secondary">
+            Detecting first transient...
           </Typography>
         </Box>
       )}
@@ -301,22 +407,89 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
       </Box>
       
       {(audioUrl || audioBuffer) && (
-        <Stack direction="row" spacing={2} alignItems="center">
-          <VolumeUpIcon color="primary" />
-          <Tooltip title="Audio Volume">
+        <>
+          <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+            <VolumeUpIcon color="primary" />
+            <Tooltip title="Audio Volume">
+              <Slider
+                value={audioVolume}
+                onChange={handleVolumeChange}
+                min={0}
+                max={1}
+                step={0.01}
+                valueLabelDisplay="auto"
+                valueLabelFormat={(value) => `${Math.round(value * 100)}%`}
+                aria-label="Audio Volume"
+                disabled={isLoading}
+              />
+            </Tooltip>
+          </Stack>
+          
+          <Box sx={{ mt: 3, mb: 1 }}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="body2">
+                Audio Start Offset (ms)
+              </Typography>
+              <Tooltip title="Adjust the timing of the audio relative to the drum sequencer. Negative values play audio earlier, positive values play audio later.">
+                <IconButton 
+                  size="small" 
+                  onClick={() => setShowTransientHelp(!showTransientHelp)}
+                >
+                  <HelpOutlineIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <IconButton 
+                size="small" 
+                onClick={handleResetOffset} 
+                title="Reset offset to zero"
+              >
+                <RestartAltIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+            
+            {showTransientHelp && (
+              <Box sx={{ mt: 1, mb: 2, p: 1, bgcolor: 'background.paper', borderRadius: 1, fontSize: '0.875rem' }}>
+                <Typography variant="body2" color="text.secondary">
+                  This control adjusts the timing between the drum sequencer and the original audio.
+                  {firstTransientTime !== null && (
+                    <>
+                      <br />
+                      First transient detected at: {firstTransientTime.toFixed(3)} seconds.
+                    </>
+                  )}
+                  <br />
+                  Use this slider to fine-tune synchronization for perfect alignment.
+                </Typography>
+              </Box>
+            )}
+            
             <Slider
-              value={audioVolume}
-              onChange={handleVolumeChange}
-              min={0}
-              max={1}
-              step={0.01}
+              value={startOffset * 1000} // Convert to milliseconds for display
+              onChange={handleOffsetChange}
+              min={-200}
+              max={200}
+              step={1}
               valueLabelDisplay="auto"
-              valueLabelFormat={(value) => `${Math.round(value * 100)}%`}
-              aria-label="Audio Volume"
-              disabled={isLoading}
+              valueLabelFormat={(value) => `${value} ms`}
+              aria-label="Audio Start Offset"
+              disabled={isLoading || isDetectingTransient}
+              marks={[
+                { value: -200, label: '-200ms' },
+                { value: 0, label: '0' },
+                { value: 200, label: '+200ms' },
+              ]}
+              sx={{ mt: 1 }}
             />
-          </Tooltip>
-        </Stack>
+            
+            {firstTransientTime !== null && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  First transient detected at: {firstTransientTime.toFixed(3)}s
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        </>
       )}
     </Paper>
   );

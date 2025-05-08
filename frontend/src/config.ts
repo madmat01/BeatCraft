@@ -7,8 +7,12 @@ export const API_URLS = {
   // Audio analysis endpoints
   ANALYZE_AUDIO: `${API_BASE_URL}/audio/analyze`,
   DOWNLOAD_MIDI: (midiPath: string) => `${API_BASE_URL}/audio/download/${encodeURIComponent(midiPath)}`,
+  DETECT_TRANSIENT: `${API_BASE_URL}/audio/detect-transient`,
 };
 
-export default {
+export const config = {
+  apiUrl: API_BASE_URL,
   API_URLS,
 };
+
+export default config;
