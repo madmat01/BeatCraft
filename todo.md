@@ -56,11 +56,11 @@
 
 ### 3.4 Audio Synchronization Adjustment (New)
 
-- [ ] Implement transient alignment logic to detect first transient in original audio  
-- [ ] Add a "Start Time Offset" dial/slider to manually fine-tune audio playback start time relative to drum sequencer  
-- [ ] Modify playback logic to apply user-defined offset to the original audio start time  
-- [ ] Provide visual feedback showing transient markers on waveform and drum grid for easier alignment  
-- [ ] Ensure offset adjustments update in real-time during playback for precise syncing  
+- [x] Implement transient alignment logic to detect first transient in original audio  
+- [x] Add a "Start Time Offset" dial/slider to manually fine-tune audio playback start time relative to drum sequencer  
+- [x] Modify playback logic to apply user-defined offset to the original audio start time  
+- [x] Provide visual feedback showing transient markers on waveform and drum grid for easier alignment  
+- [x] Ensure offset adjustments update in real-time during playback for precise syncing  
 
 ---
 
