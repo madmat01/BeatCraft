@@ -1,12 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as Tone from 'tone';
-import { Box, Stack, Typography, Slider, IconButton, Paper, Tooltip, Button } from '@mui/material';
+import { Box, Stack, Typography, Slider, IconButton, Paper, Tooltip } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import VolumeMuteIcon from '@mui/icons-material/VolumeMute';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import apiService from '../services/api';
+import Metronome from './Metronome';
+import WaveformVisualizer from './WaveformVisualizer';
+
+// Add loading spinner animation
+const spinnerAnimation = `
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+`;
+
+const style = document.createElement('style');
+style.innerHTML = spinnerAnimation;
+document.head.appendChild(style);
 
 interface DualPlaybackProps {
   audioUrl?: string;
@@ -34,6 +49,7 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
   const [audioVolume, setAudioVolume] = useState(0.8);
   const [audioBuffer, setAudioBuffer] = useState<Tone.ToneAudioBuffer | null>(null);
   const playerRef = useRef<Tone.Player | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -42,6 +58,15 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
   const [firstTransientTime, setFirstTransientTime] = useState<number | null>(null);
   const [isDetectingTransient, setIsDetectingTransient] = useState(false);
   const [showTransientHelp, setShowTransientHelp] = useState(false);
+  
+  // Toggle mute function
+  const toggleMute = () => {
+    if (audioVolume === 0) {
+      setAudioVolume(0.8);
+    } else {
+      setAudioVolume(0);
+    }
+  };
 
   // Initialize Tone.js context on component mount
   useEffect(() => {
@@ -70,6 +95,33 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
   }, []);
 
   // Load audio file when URL changes
+  // Function to validate and format audio URL
+  const getValidAudioUrl = (url: string) => {
+    if (!url) return '';
+    
+    try {
+      // Handle blob URLs (for uploaded files)
+      if (url.startsWith('blob:')) {
+        console.log('Using blob URL:', url);
+        return url;
+      }
+
+      // Handle absolute URLs
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        console.log('Using absolute URL:', url);
+        return url;
+      }
+
+      // For all other cases, ensure it's a full URL
+      const fullUrl = new URL(url, window.location.origin).toString();
+      console.log('Using full URL:', fullUrl);
+      return fullUrl;
+    } catch (e) {
+      console.error('Error formatting URL:', e);
+      return '';
+    }
+  };
+
   useEffect(() => {
     if (!audioUrl) return;
 
@@ -84,9 +136,10 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
           playerRef.current = null;
         }
         
-        console.log('Loading audio from URL:', audioUrl);
+        const validUrl = getValidAudioUrl(audioUrl);
+        console.log('Loading audio from URL:', validUrl);
         // Load audio file using Tone.js for better integration
-        const buffer = await Tone.Buffer.fromUrl(audioUrl);
+        const buffer = await Tone.Buffer.fromUrl(validUrl);
         // Store the Tone.Buffer directly instead of extracting AudioBuffer
         setAudioBuffer(buffer);
         console.log('Audio buffer loaded successfully:', buffer.duration, 'seconds');
@@ -118,14 +171,27 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
         setIsDetectingTransient(true);
         setError(null);
         
-        const response = await apiService.detectFirstTransient(audioFile);
-        setFirstTransientTime(response.first_transient_time);
-        console.log('First transient detected at:', response.first_transient_time, 'seconds');
+        try {
+          const response = await apiService.detectFirstTransient(audioFile);
+          setFirstTransientTime(response.first_transient_time);
+          console.log('First transient detected at:', response.first_transient_time, 'seconds');
+        } catch (apiErr: any) {
+          // Handle 404 error gracefully - backend endpoint might not be available
+          if (apiErr?.response?.status === 404) {
+            console.warn('Transient detection endpoint not available - using default value');
+            // Use a default value instead
+            setFirstTransientTime(0);
+          } else {
+            // For other errors, propagate them
+            throw apiErr;
+          }
+        }
         
         setIsDetectingTransient(false);
       } catch (err) {
         console.error('Error detecting first transient:', err);
-        setError('Failed to detect first transient');
+        // Don't show error to user for this feature
+        // setError('Failed to detect first transient');
         setIsDetectingTransient(false);
       }
     };
@@ -305,23 +371,61 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
     }
   };
 
-  // Handle offset change
-  const handleOffsetChange = (_: Event, value: number | number[]) => {
-    const offset = value as number;
+  // Handle offset change from slider
+  const handleOffsetChange = (_: Event | React.ChangeEvent<{}>, value: number | number[]) => {
+    const offset = Array.isArray(value) ? value[0] : value;
     // Convert from milliseconds to seconds
     const offsetInSeconds = offset / 1000;
-    setStartOffset(offsetInSeconds);
     
-    console.log('Audio start offset changed to:', offsetInSeconds, 'seconds');
-    
-    // If currently playing, restart playback with new offset
-    if (isPlaying) {
-      handleStop();
-      // Small delay to ensure everything is stopped
-      setTimeout(() => {
-        handlePlay();
-      }, 100);
+    // Only update if the value actually changed to reduce unnecessary rerenders
+    if (offsetInSeconds !== startOffset) {
+      setStartOffset(offsetInSeconds);
+      console.log('Audio start offset changed to:', offsetInSeconds, 'seconds');
+      
+      // If currently playing, restart playback with new offset
+      if (isPlaying) {
+        handleStop();
+        // Small delay to ensure everything is stopped
+        setTimeout(() => {
+          handlePlay();
+        }, 100);
+      }
     }
+  };
+  
+  // Handle offset change from waveform marker drag
+  const handleWaveformOffsetChange = (offsetInSeconds: number) => {
+    // Only update if the value actually changed to reduce unnecessary rerenders
+    if (offsetInSeconds !== startOffset) {
+      setStartOffset(offsetInSeconds);
+      console.log('Audio start offset changed by waveform drag to:', offsetInSeconds, 'seconds');
+      
+      // If currently playing, restart playback with new offset
+      if (isPlaying) {
+        handleStop();
+        // Small delay to ensure everything is stopped
+        setTimeout(() => {
+          handlePlay();
+        }, 100);
+      }
+    }
+  };
+  
+  // Reference to store the timeout ID
+  const offsetTimeoutRef = useRef<number | null>(null);
+  
+  // Debounced version of offset change to prevent too many updates
+  const debouncedOffsetChange = (event: Event | React.ChangeEvent<{}>, value: number | number[]) => {
+    // Clear any existing timeout
+    if (offsetTimeoutRef.current !== null) {
+      window.clearTimeout(offsetTimeoutRef.current);
+    }
+    
+    // Set a new timeout
+    offsetTimeoutRef.current = window.setTimeout(() => {
+      handleOffsetChange(event, value);
+      offsetTimeoutRef.current = null;
+    }, 50); // 50ms debounce time
   };
 
   // Reset offset to zero
@@ -344,6 +448,137 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
         Dual Playback
       </Typography>
       
+      {!audioUrl && !isLoading && (
+        <Box sx={{ p: 3, textAlign: 'center' }}>
+          <Typography variant="body1" color="text.secondary" gutterBottom>
+            Upload an audio file to play
+          </Typography>
+        </Box>
+      )}
+      
+      <Box sx={{ mb: 3 }}>
+        <Paper sx={{ p: 2 }}>
+          {audioUrl ? (
+            <Box>
+              <Typography variant="body2" gutterBottom>Audio Player</Typography>
+              <WaveformVisualizer
+                audioUrl={audioUrl ? getValidAudioUrl(audioUrl) : undefined}
+                isPlaying={isPlaying}
+                onReady={() => {
+                  console.log('Waveform visualizer ready');
+                  setIsLoading(false);
+                }}
+                height={100}
+                waveColor="#4a90e2"
+                progressColor="#2c5282"
+                startOffset={startOffset}
+                onOffsetChange={handleWaveformOffsetChange}
+              />
+              
+              {/* Audio Start Offset control moved here, directly under the waveform */}
+              {(audioUrl || audioBuffer) && (
+                <Box sx={{ mt: 2, mb: 2 }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="body2">
+                      Audio Start Offset (ms)
+                    </Typography>
+                    <Tooltip title="Adjust the timing of the audio relative to the drum sequencer. Negative values play audio earlier, positive values play audio later.">
+                      <IconButton 
+                        size="small" 
+                        onClick={() => setShowTransientHelp(!showTransientHelp)}
+                      >
+                        <HelpOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <IconButton 
+                      size="small" 
+                      onClick={handleResetOffset} 
+                      title="Reset offset to zero"
+                    >
+                      <RestartAltIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                  
+                  {showTransientHelp && (
+                    <Box sx={{ mt: 1, mb: 2, p: 1, bgcolor: 'background.paper', borderRadius: 1, fontSize: '0.875rem' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        This control adjusts the timing between the drum sequencer and the original audio.
+                        {firstTransientTime !== null && (
+                          <>
+                            <br />
+                            First transient detected at: {firstTransientTime.toFixed(3)} seconds.
+                          </>
+                        )}
+                        <br />
+                        Use this slider to fine-tune synchronization for perfect alignment.
+                      </Typography>
+                    </Box>
+                  )}
+                  
+                  <Slider
+                    value={startOffset * 1000} // Convert to milliseconds for display
+                    onChange={debouncedOffsetChange} // Use debounced version to prevent too many updates
+                    onChangeCommitted={handleOffsetChange} // Final update when slider is released
+                    min={-200}
+                    max={200}
+                    step={1}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={(value) => `${value} ms`}
+                    aria-label="Audio Start Offset"
+                    disabled={isLoading || isDetectingTransient}
+                    marks={[
+                      { value: -200, label: '-200ms' },
+                      { value: 0, label: '0' },
+                      { value: 200, label: '+200ms' },
+                    ]}
+                    sx={{ mt: 1 }}
+                  />
+                  
+                  {firstTransientTime !== null && (
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        First transient detected at: {firstTransientTime.toFixed(3)}s
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              )}
+              
+              <audio 
+                ref={(audioElement) => {
+                  if (audioElement) {
+                    // Store the reference
+                    audioRef.current = audioElement;
+                    // Sync play state with component state
+                    if (isPlaying && audioElement.paused) {
+                      audioElement.play().catch(err => console.error('Play error:', err));
+                    } else if (!isPlaying && !audioElement.paused) {
+                      audioElement.pause();
+                    }
+                  }
+                }}
+                src={audioUrl ? getValidAudioUrl(audioUrl) : ''} 
+                controls 
+                style={{ width: '100%', display: 'none' }}
+                onCanPlay={() => {
+                  console.log('Audio ready');
+                  setIsLoading(false);
+                }}
+                onError={(e) => {
+                  console.error('Audio player error:', e);
+                  setError('Failed to load audio file');
+                  setIsLoading(false);
+                }}
+              />
+            </Box>
+          ) : (
+            <Typography variant="body1" color="text.secondary" align="center" sx={{ py: 4 }}>
+              Upload an audio file to play
+            </Typography>
+          )}
+        </Paper>
+      </Box>
+
       {isLoading && (
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <div className="loading-spinner" style={{ 
@@ -385,112 +620,93 @@ export const DualPlayback: React.FC<DualPlaybackProps> = ({
         }
       `}</style>
       
+      {isLoading && (
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <div className="loading-spinner" style={{ 
+            width: '20px', 
+            height: '20px', 
+            border: '2px solid #f3f3f3',
+            borderTop: '2px solid #3498db',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            marginRight: '8px'
+          }} />
+          <Typography variant="body2" color="text.secondary">
+            Loading audio file...
+          </Typography>
+        </Box>
+      )}
+      
+      {isDetectingTransient && (
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <div className="loading-spinner" style={{ 
+            width: '20px', 
+            height: '20px', 
+            border: '2px solid #f3f3f3',
+            borderTop: '2px solid #3498db',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            marginRight: '8px'
+          }} />
+          <Typography variant="body2" color="text.secondary">
+            Detecting first transient...
+          </Typography>
+        </Box>
+      )}
+      
       {error && (
-        <Typography variant="body2" color="error">
+        <Typography variant="body2" color="error" sx={{ mb: 2 }}>
           {error}
         </Typography>
       )}
       
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <IconButton 
+      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+        <IconButton
           onClick={isPlaying ? handleStop : handlePlay}
           color="primary"
           size="large"
           disabled={isLoading || (!audioUrl && !audioBuffer)}
         >
-          {isPlaying ? <StopIcon /> : <PlayArrowIcon />}
+          {isPlaying ? <StopIcon fontSize="large" /> : <PlayArrowIcon fontSize="large" />}
         </IconButton>
         
         <Typography variant="body1" sx={{ ml: 1 }}>
           {isPlaying ? 'Stop' : 'Play'} {audioUrl ? '(Drums + Audio)' : '(Drums Only)'}
         </Typography>
-      </Box>
+        
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 2 }}>
+          <IconButton onClick={toggleMute} size="small">
+            {audioVolume === 0 ? <VolumeMuteIcon /> : <VolumeUpIcon />}
+          </IconButton>
+          <Slider
+            value={audioVolume * 100}
+            onChange={handleVolumeChange}
+            aria-labelledby="audio-volume-slider"
+            min={0}
+            max={100}
+            sx={{ width: 100 }}
+          />
+        </Stack>
+      </Stack>
       
-      {(audioUrl || audioBuffer) && (
-        <>
-          <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-            <VolumeUpIcon color="primary" />
-            <Tooltip title="Audio Volume">
-              <Slider
-                value={audioVolume}
-                onChange={handleVolumeChange}
-                min={0}
-                max={1}
-                step={0.01}
-                valueLabelDisplay="auto"
-                valueLabelFormat={(value) => `${Math.round(value * 100)}%`}
-                aria-label="Audio Volume"
-                disabled={isLoading}
-              />
-            </Tooltip>
-          </Stack>
-          
-          <Box sx={{ mt: 3, mb: 1 }}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="body2">
-                Audio Start Offset (ms)
-              </Typography>
-              <Tooltip title="Adjust the timing of the audio relative to the drum sequencer. Negative values play audio earlier, positive values play audio later.">
-                <IconButton 
-                  size="small" 
-                  onClick={() => setShowTransientHelp(!showTransientHelp)}
-                >
-                  <HelpOutlineIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <IconButton 
-                size="small" 
-                onClick={handleResetOffset} 
-                title="Reset offset to zero"
-              >
-                <RestartAltIcon fontSize="small" />
-              </IconButton>
-            </Stack>
-            
-            {showTransientHelp && (
-              <Box sx={{ mt: 1, mb: 2, p: 1, bgcolor: 'background.paper', borderRadius: 1, fontSize: '0.875rem' }}>
-                <Typography variant="body2" color="text.secondary">
-                  This control adjusts the timing between the drum sequencer and the original audio.
-                  {firstTransientTime !== null && (
-                    <>
-                      <br />
-                      First transient detected at: {firstTransientTime.toFixed(3)} seconds.
-                    </>
-                  )}
-                  <br />
-                  Use this slider to fine-tune synchronization for perfect alignment.
-                </Typography>
-              </Box>
-            )}
-            
-            <Slider
-              value={startOffset * 1000} // Convert to milliseconds for display
-              onChange={handleOffsetChange}
-              min={-200}
-              max={200}
-              step={1}
-              valueLabelDisplay="auto"
-              valueLabelFormat={(value) => `${value} ms`}
-              aria-label="Audio Start Offset"
-              disabled={isLoading || isDetectingTransient}
-              marks={[
-                { value: -200, label: '-200ms' },
-                { value: 0, label: '0' },
-                { value: 200, label: '+200ms' },
-              ]}
-              sx={{ mt: 1 }}
-            />
-            
-            {firstTransientTime !== null && (
-              <Box sx={{ mt: 1 }}>
-                <Typography variant="caption" color="text.secondary">
-                  First transient detected at: {firstTransientTime.toFixed(3)}s
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        </>
+      {/* Metronome integration */}
+      {bpm && (
+        <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
+          <Typography variant="subtitle2" gutterBottom>Metronome</Typography>
+          <Metronome 
+            bpm={bpm} 
+            isPlaying={isPlaying}
+            onBpmChange={(newBpm) => {
+              if (Tone.Transport) {
+                Tone.Transport.bpm.value = newBpm;
+                console.log('Updated Transport BPM to:', newBpm);
+              }
+            }}
+          />
+        </Box>
       )}
+      
+      {/* Audio Start Offset control moved to be under the waveform visualizer */}
     </Paper>
   );
 };
