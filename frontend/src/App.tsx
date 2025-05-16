@@ -47,9 +47,26 @@ function App() {
   const drumSequencerRef = useRef<any>(null);
   const { loading, error, analysis, analyzeAudio, downloadMidi, setError } = useAudioAnalysis();
 
+  // Create and manage audio URL when file is selected
+  useEffect(() => {
+    if (file) {
+      console.log('Creating URL for file:', file.name);
+      const url = URL.createObjectURL(file);
+      console.log('Created URL:', url);
+      setAudioUrl(url);
+
+      return () => {
+        console.log('Cleaning up URL:', url);
+        URL.revokeObjectURL(url);
+        setAudioUrl(null);
+      };
+    }
+  }, [file]);
+
   // Update sequencer parameters when analysis is complete
   useEffect(() => {
     if (analysis) {
+      console.log('Analysis complete, updating parameters');
       setSequencerBpm(analysis.tempo);
       setSequencerSwing(analysis.swing_ratio);
       
@@ -58,23 +75,18 @@ function App() {
         setSequencerPattern(analysis.pattern);
         console.log('MIDI pattern loaded from analysis:', analysis.pattern);
       }
-      
-      // Create object URL for the original audio file if available
-      if (file) {
-        const url = URL.createObjectURL(file);
-        setAudioUrl(url);
-        
-        // Clean up the URL when component unmounts
-        return () => {
-          URL.revokeObjectURL(url);
-        };
-      }
     }
-  }, [analysis, file]);
+  }, [analysis]);
 
   const handleFileSelected = (selectedFile: File) => {
-    setFile(selectedFile);
+    console.log('File selected:', selectedFile.name);
+    // Reset states
     setError(null);
+    setSequencerBpm(null);
+    setSequencerSwing(null);
+    setSequencerPattern(null);
+    // Set new file
+    setFile(selectedFile);
   };
 
   const handleAnalyze = async () => {
@@ -96,21 +108,33 @@ function App() {
           
           {sequencerBpm && sequencerSwing ? (
             <>
-              <DualPlayback 
-                audioUrl={audioUrl || undefined}
-                bpm={sequencerBpm}
-                onPlayStateChange={(playing) => {
-                  setIsPlaying(playing);
-                  // Coordinate with DrumSequencer
-                  if (drumSequencerRef.current) {
-                    if (playing) {
-                      drumSequencerRef.current.startPlayback();
-                    } else {
-                      drumSequencerRef.current.stopPlayback();
-                    }
-                  }
-                }}
-              />
+              <Box sx={{ mb: 4 }}>
+                {audioUrl ? (
+                  <DualPlayback 
+                    audioUrl={audioUrl}
+                    audioFile={file || undefined}
+                    bpm={sequencerBpm}
+                    onPlayStateChange={(playing) => {
+                      console.log('Play state changed:', playing);
+                      setIsPlaying(playing);
+                      // Coordinate with DrumSequencer
+                      if (drumSequencerRef.current) {
+                        if (playing) {
+                          drumSequencerRef.current.startPlayback();
+                        } else {
+                          drumSequencerRef.current.stopPlayback();
+                        }
+                      }
+                    }}
+                  />
+                ) : (
+                  <Paper sx={{ p: 3 }}>
+                    <Typography variant="body1" color="text.secondary" align="center">
+                      Upload an audio file to see the waveform visualization
+                    </Typography>
+                  </Paper>
+                )}
+              </Box>
               <DrumSequencer 
                 initialBpm={sequencerBpm} 
                 initialSwing={sequencerSwing}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import DrumSequencer from './DrumSequencer';
 import React from 'react';
 import { useDrumSequencer, UseDrumSequencerReturn } from '../hooks/useDrumSequencer';
@@ -54,12 +54,7 @@ describe('DrumSequencer', () => {
     currentStep: 0,
     bpm: 120,
     swing: 0,
-    steps: [
-      [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-      [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-      [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-      [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-    ],
+    steps: Array(4).fill(Array(16).fill({ active: false, velocity: 0.75 })),
     volume: 0,
     togglePlay: vi.fn(),
     stop: vi.fn(),
@@ -78,6 +73,7 @@ describe('DrumSequencer', () => {
       bpm: { value: 120 },
       swing: 0,
     }),
+    setStepVelocity: vi.fn(),
   });
 
   beforeEach(() => {
@@ -99,17 +95,12 @@ describe('DrumSequencer', () => {
     const mockTogglePlay = vi.fn();
     const mockStop = vi.fn();
     
-    vi.mocked(useDrumSequencer).mockReturnValue({
+    const mockReturnValue = {
       isPlaying: false,
       currentStep: 0,
       bpm: 120,
       swing: 0,
-      steps: [
-        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-      ],
+      steps: Array(4).fill(Array(16).fill({ active: false, velocity: 0.75 })),
       volume: 0,
       togglePlay: mockTogglePlay,
       stop: mockStop,
@@ -128,18 +119,27 @@ describe('DrumSequencer', () => {
         bpm: { value: 120 },
         swing: 0,
       }),
-    });
+      setStepVelocity: vi.fn(),
+    };
     
-    // Render with external play state
-    render(<DrumSequencer externalPlayState={true} />);
+    vi.mocked(useDrumSequencer).mockReturnValue(mockReturnValue);
+    
+    // Render with external play state true
+    const { rerender } = render(<DrumSequencer externalPlayState={true} />);
     
     // Check if togglePlay was called when externalPlayState is true
     await waitFor(() => {
       expect(mockTogglePlay).toHaveBeenCalled();
     });
     
-    // Update with external play state false
-    render(<DrumSequencer externalPlayState={false} />);
+    // Update mock to show playing state
+    vi.mocked(useDrumSequencer).mockReturnValue({
+      ...mockReturnValue,
+      isPlaying: true
+    });
+    
+    // Rerender with external play state false
+    rerender(<DrumSequencer externalPlayState={false} />);
     
     // Check if stop was called when externalPlayState is false
     await waitFor(() => {
@@ -148,21 +148,16 @@ describe('DrumSequencer', () => {
   });
 
   it('exposes imperative methods via ref', async () => {
-    // Mock the useDrumSequencer hook
-    const mockTogglePlay = vi.fn();
+    // Mock the useDrumSequencer hook with a simple implementation
+    const mockTogglePlay = vi.fn().mockResolvedValue(undefined);
     const mockStop = vi.fn();
-    
+
     vi.mocked(useDrumSequencer).mockReturnValue({
       isPlaying: false,
       currentStep: 0,
       bpm: 120,
       swing: 0,
-      steps: [
-        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
-      ],
+      steps: Array(4).fill(Array(16).fill({ active: false, velocity: 0.75 })),
       volume: 0,
       togglePlay: mockTogglePlay,
       stop: mockStop,
@@ -181,33 +176,44 @@ describe('DrumSequencer', () => {
         bpm: { value: 120 },
         swing: 0,
       }),
+      setStepVelocity: vi.fn(),
     });
-    
-    // Create a ref
+
+    // Create and render component with ref
     const ref = React.createRef<{
-      startPlayback: () => void;
+      startPlayback: () => Promise<void>;
       stopPlayback: () => void;
     }>();
-    
-    // Render with ref
+
     render(<DrumSequencer ref={ref} />);
-    
-    // Call the imperative methods
-    ref.current?.startPlayback();
-    expect(mockTogglePlay).toHaveBeenCalled();
-    
+
+    // Wait for ref to be set
+    await vi.waitFor(() => {
+      expect(ref.current).toBeTruthy();
+    });
+
+    // Test startPlayback
+    await ref.current?.startPlayback();
+    await vi.waitFor(() => {
+      expect(mockTogglePlay).toHaveBeenCalled();
+    }, { timeout: 1000 });
+
+    // Update mock to show playing state
+    vi.mocked(useDrumSequencer).mockReturnValue({
+      ...vi.mocked(useDrumSequencer).mock.results[0].value,
+      isPlaying: true
+    });
+
+    // Test stopPlayback
     ref.current?.stopPlayback();
-    expect(mockStop).toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(mockStop).toHaveBeenCalled();
+    }, { timeout: 1000 });
   });
 
   it('loads initial pattern when provided', () => {
     // Mock pattern data
-    const initialPattern = [
-      [true, false, true, false],
-      [false, true, false, true],
-      [true, true, false, false],
-      [false, false, true, true],
-    ];
+    const initialPattern = Array(4).fill(Array(4).fill({ active: false, velocity: 0.75 }));
     
     const setPatternMock = vi.fn();
     
@@ -239,24 +245,48 @@ describe('DrumSequencer', () => {
   });
 
   it('handles stop button click', async () => {
+    // Mock the useDrumSequencer hook
     const mockStop = vi.fn();
-    
-    // Mock the hook with our spy function
     vi.mocked(useDrumSequencer).mockReturnValue({
-      ...createMockReturn(),
+      isPlaying: true,
+      currentStep: 0,
+      bpm: 120,
+      swing: 0,
+      steps: Array(4).fill(Array(16).fill({ active: false, velocity: 0.75 })),
+      volume: 0,
+      togglePlay: vi.fn(),
       stop: mockStop,
-      isPlaying: true
+      setBpm: vi.fn(),
+      setSwing: vi.fn(),
+      toggleStep: vi.fn(),
+      setVolume: vi.fn(),
+      playSound: vi.fn(),
+      setPattern: vi.fn(),
+      samplesLoaded: true,
+      samplesError: null,
+      getTransport: vi.fn().mockReturnValue({
+        start: vi.fn(),
+        stop: vi.fn(),
+        pause: vi.fn(),
+        bpm: { value: 120 },
+        swing: 0,
+      }),
+      setStepVelocity: vi.fn(),
     });
-    
-    const { getByTestId } = render(<DrumSequencer />);
-    
-    // Click the stop button
-    fireEvent.click(getByTestId('stop-button'));
-    
-    // Check if stop was called
+
+    // Render component
+    render(<DrumSequencer />);
+
+    // Click stop button
+    const stopButton = screen.getByTestId('stop-button');
+    await act(async () => {
+      fireEvent.click(stopButton);
+    });
+
+    // Verify stop was called
     await vi.waitFor(() => {
       expect(mockStop).toHaveBeenCalled();
-    });
+    }, { timeout: 1000 });
   });
 
   it('displays error message when sample loading fails', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import DualPlayback from "./DualPlayback";
 import apiService from "../services/api";
 
@@ -65,12 +65,14 @@ describe("DualPlayback", () => {
     expect(screen.getByText("Audio Start Offset (ms)")).toBeInTheDocument();
   });
 
-  it("calls detectFirstTransient when audioFile prop is provided", () => {
+  it("calls detectFirstTransient when audioFile prop is provided", async () => {
     const testFile = new File(["test"], "test.wav", { type: "audio/wav" });
     render(<DualPlayback audioFile={testFile} />);
     
-    // Check if the API service was called
-    expect(apiService.detectFirstTransient).toHaveBeenCalledWith(testFile);
+    // Wait for the async operation to complete
+    await waitFor(() => {
+      expect(apiService.detectFirstTransient).toHaveBeenCalledWith(testFile);
+    });
   });
 
   it("displays detected transient time when available", async () => {

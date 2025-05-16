@@ -1,4 +1,4 @@
-import React, { useState, useImperativeHandle, forwardRef } from 'react';
+import React from 'react';
 import { 
   Box, 
   Stack, 
@@ -13,17 +13,14 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button,
-  Grid
+  Button
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import SpeedIcon from '@mui/icons-material/Speed';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
-import SettingsIcon from '@mui/icons-material/Settings';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
-import { useDrumSequencer, DrumSoundType, DrumStep } from '../hooks/useDrumSequencer';
+import { useDrumSequencer, DrumSoundType } from '../hooks/useDrumSequencer';
 
 // Define drum sound info
 interface DrumSound {
@@ -48,7 +45,7 @@ interface DrumSequencerProps {
 }
 
 export const DrumSequencer = React.forwardRef<{
-  startPlayback: () => void;
+  startPlayback: () => Promise<void>;
   stopPlayback: () => void;
 }, DrumSequencerProps>(({
   initialBpm = 120,
@@ -87,16 +84,14 @@ export const DrumSequencer = React.forwardRef<{
   // Expose methods via ref
   React.useImperativeHandle(ref, () => ({
     startPlayback: async () => {
-      if (!isPlaying && samplesLoaded) {
+      if (samplesLoaded) {
         await togglePlay();
       }
     },
     stopPlayback: () => {
-      if (isPlaying) {
-        stop();
-      }
+      stop();
     }
-  }), [isPlaying, togglePlay, stop, samplesLoaded]);
+  }), [togglePlay, stop, samplesLoaded]);
   
   // Respond to external play state changes
   React.useEffect(() => {
@@ -132,11 +127,6 @@ export const DrumSequencer = React.forwardRef<{
   const handleCloseStepEditor = () => {
     setStepEditorOpen(false);
     setSelectedStep(null);
-  };
-  
-  // Get sound type from index
-  const getSoundType = (soundIndex: number): DrumSoundType => {
-    return DRUM_SOUNDS[soundIndex].type;
   };
   
   return (
@@ -199,6 +189,7 @@ export const DrumSequencer = React.forwardRef<{
             color="primary"
             size="large"
             disabled={!samplesLoaded}
+            data-testid="stop-button"
           >
             {isPlaying ? <StopIcon /> : <PlayArrowIcon />}
           </IconButton>

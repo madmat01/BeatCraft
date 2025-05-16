@@ -28,6 +28,7 @@
     "@mui/material": "^7.0.2",
     "axios": "^1.8.4",
     "react-dropzone": "^14.3.8",
-    "tone": "^15.0.4"
+    "tone": "^15.0.4",
+    "wavesurfer.js": "^6.6.3"
   }
 }

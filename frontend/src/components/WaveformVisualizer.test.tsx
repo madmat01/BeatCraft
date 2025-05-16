@@ -1,10 +1,11 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import WaveformVisualizer from './WaveformVisualizer';
 
 // Mock WaveSurfer
-jest.mock('wavesurfer.js', () => {
+vi.mock('wavesurfer.js', () => {
   return {
     __esModule: true,
     default: {
@@ -27,8 +28,8 @@ jest.mock('wavesurfer.js', () => {
 });
 
 describe('WaveformVisualizer', () => {
-  const mockOnReady = jest.fn();
-  const mockOnOffsetChange = jest.fn();
+  const mockOnReady = vi.fn();
+  const mockOnOffsetChange = vi.fn();
   const defaultProps = {
     audioUrl: 'test-audio.mp3',
     isPlaying: false,
@@ -41,7 +42,7 @@ describe('WaveformVisualizer', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('renders without crashing', () => {
